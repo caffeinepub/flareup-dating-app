@@ -33,7 +33,6 @@ import {
   CheckCircle,
   ChevronLeft,
   Coins,
-  Compass,
   Crown,
   Diamond,
   Eye,
@@ -81,8 +80,7 @@ type Screen =
   | "chat"
   | "agency"
   | "liveview"
-  | "messages"
-  | "discover";
+  | "messages";
 type Gender = "male" | "female";
 type Role = "user" | "host" | "agency";
 
@@ -98,19 +96,6 @@ interface UserState {
   role: Role;
   isPremium: boolean;
   bio: string;
-  profilePicture: string;
-  coverPhoto: string;
-}
-
-interface Conversation {
-  id: number;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  lastTime: string;
-  unread: number;
-  online: boolean;
-  messages: Message[];
 }
 
 interface GameHistory {
@@ -129,7 +114,6 @@ interface Message {
   text: string;
   time: string;
   mine: boolean;
-  replyTo?: string;
 }
 
 interface AppContextType {
@@ -143,12 +127,6 @@ interface AppContextType {
   addGameHistory: (g: GameHistory) => void;
   activeLiveStream: number | null;
   setActiveLiveStream: (id: number | null) => void;
-  conversations: Conversation[];
-  setConversations: (c: Conversation[]) => void;
-  selectedConversationId: number | null;
-  setSelectedConversationId: (id: number | null) => void;
-  openRechargeOnLoad: boolean;
-  setOpenRechargeOnLoad: (v: boolean) => void;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -325,7 +303,7 @@ const gamesList = [
   },
 ];
 
-const _mockMessages: Message[] = [
+const mockMessages: Message[] = [
   {
     id: 1,
     from: "Sofia",
@@ -363,7 +341,7 @@ const _mockMessages: Message[] = [
   },
 ];
 
-const _mockAgencyMembers = [
+const mockAgencyMembers = [
   {
     id: 1,
     name: "Amara",
@@ -425,7 +403,6 @@ function CoinBadge({ amount }: { amount: number }) {
     </span>
   );
 }
-// biome-ignore lint/correctness/noUnusedVariables: kept for future use
 function DiamondBadge({ amount }: { amount: number }) {
   return (
     <span className="inline-flex items-center gap-1 text-cyan-500 font-bold">
@@ -484,10 +461,6 @@ function AuthScreen() {
       country: form.country,
       coins: 0,
       diamonds: 200,
-      profilePicture:
-        user.profilePicture ||
-        "/assets/generated/profile-sofia.dim_400x500.jpg",
-      coverPhoto: user.coverPhoto || "",
     });
     setIsLoggedIn(true);
     setScreen("home");
@@ -649,16 +622,13 @@ function GiftModal({
   onClose,
   inStream = false,
 }: { open: boolean; onClose: () => void; inStream?: boolean }) {
-  const { user, setUser, setScreen, setOpenRechargeOnLoad } = useApp();
+  const { user, setUser } = useApp();
   const [selfGift, setSelfGift] = useState(false);
   const [sentGift, setSentGift] = useState<string | null>(null);
 
   const sendGift = (gift: (typeof giftItems)[0]) => {
     if (user.coins < gift.cost) {
-      toast.error("Not enough coins! Redirecting to wallet... 🪙");
-      setOpenRechargeOnLoad(true);
-      setScreen("wallet");
-      onClose();
+      toast.error("Not enough coins! 🪙 Recharge in Wallet");
       return;
     }
     setUser({ ...user, coins: user.coins - gift.cost });
@@ -750,117 +720,267 @@ function GiftModal({
   );
 }
 
-// ── Home Screen (Live Streams) ───────────────────────────────────────────────
+// ── Home Screen ───────────────────────────────────────────────────────────────
 function HomeScreen() {
-  const { activeLiveStream, setActiveLiveStream, setScreen, user } = useApp();
+  const { user, setScreen } = useApp();
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [direction, setDirection] = useState(0);
+  const profiles = mockProfiles;
 
-  if (activeLiveStream !== null) {
-    return (
-      <LiveStreamView
-        streamId={activeLiveStream}
-        onBack={() => setActiveLiveStream(null)}
-      />
-    );
-  }
+  const handleSkip = () => {
+    setDirection(-1);
+    setCurrentIdx((i) => (i + 1) % profiles.length);
+  };
+  const handleLike = () => {
+    setDirection(1);
+    toast.success(`You liked ${profiles[currentIdx].name}! 💕`);
+    setCurrentIdx((i) => (i + 1) % profiles.length);
+  };
+
+  const topProfile = profiles[currentIdx];
+  const nextProfile = profiles[(currentIdx + 1) % profiles.length];
+  const nextNext = profiles[(currentIdx + 2) % profiles.length];
 
   return (
-    <ScrollArea className="h-full" data-ocid="home.page">
-      <div className="p-4 pb-24">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 flare-gradient rounded-full flex items-center justify-center">
-              <Flame className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-2xl font-black flare-gradient-text">
-              🔴 Live Now
-            </h1>
+    <div className="flex flex-col h-full bg-background" data-ocid="home.page">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 flare-gradient rounded-full flex items-center justify-center">
+            <Flame className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-xl font-black flare-gradient-text">
+            FlareUp
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 rounded-full px-2 py-1">
+            <span className="text-xs">🪙</span>
+            <span className="text-xs font-bold text-yellow-600">
+              {user.coins.toLocaleString()}
+            </span>
           </div>
           <button
             type="button"
-            data-ocid="home.go_live_button"
-            onClick={() => {
-              if (user.role === "host") {
-                toast.success("🔴 Starting your live stream...");
-              } else {
-                toast.error(
-                  "You need Host status to go live! Recharge ₦30,000+ to become a host.",
-                );
-              }
-            }}
-            className="flare-gradient text-white text-xs font-bold rounded-full px-3 py-1.5 flex items-center gap-1"
+            data-ocid="home.notification_button"
+            onClick={() => setScreen("messages")}
+            className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-xs border border-border relative"
           >
-            <Video className="w-3 h-3" /> Go Live
+            <Bell className="w-4 h-4 text-muted-foreground" />
+            <span className="absolute top-1 right-1 w-2 h-2 flare-gradient rounded-full" />
           </button>
         </div>
+      </header>
 
-        <div className="grid grid-cols-2 gap-3">
-          {mockStreams.map((stream, i) => (
-            <motion.button
-              key={stream.id}
-              data-ocid={`home.stream.item.${i + 1}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-              onClick={() => setActiveLiveStream(stream.id)}
-              className="relative rounded-3xl overflow-hidden aspect-[3/4] shadow-card text-left"
+      {/* Swipe Cards */}
+      <div className="flex-1 flex flex-col items-center px-4 pt-2 pb-4 overflow-hidden">
+        <div className="relative w-full flex-1" style={{ maxHeight: 420 }}>
+          {/* Back cards */}
+          <div
+            className="absolute inset-0 top-4 mx-4 rounded-3xl overflow-hidden shadow"
+            style={{
+              background: "linear-gradient(135deg, #FF2B7A20, #FF8A0020)",
+              transform: "scale(0.94) translateY(8px)",
+            }}
+          >
+            <img
+              src={nextNext.image}
+              alt={nextNext.name}
+              className="w-full h-full object-cover opacity-60"
+            />
+          </div>
+          <div
+            className="absolute inset-0 top-2 mx-2 rounded-3xl overflow-hidden shadow-lg"
+            style={{ transform: "scale(0.97) translateY(4px)" }}
+          >
+            <img
+              src={nextProfile.image}
+              alt={nextProfile.name}
+              className="w-full h-full object-cover opacity-80"
+            />
+          </div>
+          {/* Top card */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIdx}
+              initial={{
+                opacity: 0,
+                x: direction * 100,
+                rotate: direction * 8,
+              }}
+              animate={{ opacity: 1, x: 0, rotate: 0 }}
+              exit={{
+                opacity: 0,
+                x: direction * -200,
+                rotate: direction * -12,
+              }}
+              transition={{ type: "spring", stiffness: 260, damping: 25 }}
+              className="absolute inset-0 rounded-3xl overflow-hidden shadow-2xl cursor-grab"
             >
               <img
-                src={stream.image}
-                alt={stream.name}
+                src={topProfile.image}
+                alt={topProfile.name}
                 className="w-full h-full object-cover"
               />
+              {/* Gradient overlay */}
               <div
                 className="absolute inset-0"
                 style={{
                   background:
-                    "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 50%)",
+                    "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%)",
                 }}
               />
-              <div className="absolute top-2 left-2 flex items-center gap-1">
-                <span className="pulse-live bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full">
-                  LIVE
+              {/* Badges */}
+              <div className="absolute top-4 left-4 flex gap-2">
+                {topProfile.hot && (
+                  <span className="bg-orange-500/90 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    🔥 Hot
+                  </span>
+                )}
+                {topProfile.verified && (
+                  <span className="bg-white/90 text-emerald-600 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Verified
+                  </span>
+                )}
+                {topProfile.role === "host" && (
+                  <span className="flare-gradient text-white text-xs font-bold px-2 py-1 rounded-full">
+                    👑 Host
+                  </span>
+                )}
+              </div>
+              {/* Info */}
+              <div className="absolute bottom-4 left-4 right-4">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <h2 className="text-white text-2xl font-black">
+                      {topProfile.name}, {topProfile.age}
+                    </h2>
+                    <div className="flex items-center gap-1 text-white/80 text-sm mt-0.5">
+                      <MapPin className="w-3 h-3" />
+                      <span>{topProfile.location}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <DiamondBadge amount={topProfile.diamonds} />
+                    <div className="flex items-center gap-1 text-yellow-400 text-xs">
+                      <Star className="w-3 h-3 fill-yellow-400" />
+                      <Star className="w-3 h-3 fill-yellow-400" />
+                      <Star className="w-3 h-3 fill-yellow-400" />
+                      <Star className="w-3 h-3 fill-yellow-400" />
+                      <Star className="w-3 h-3" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Message button */}
+              <button
+                type="button"
+                data-ocid="home.card.message_button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setScreen("chat");
+                }}
+                className="absolute bottom-16 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full flex items-center justify-center"
+              >
+                <MessageCircle className="w-5 h-5 text-white" />
+              </button>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center justify-center gap-8 mt-4">
+          <button
+            type="button"
+            data-ocid="home.skip_button"
+            onClick={handleSkip}
+            className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-card border-2 border-border hover:scale-110 transition-transform active:scale-95"
+          >
+            <X className="w-7 h-7 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            data-ocid="home.superlike_button"
+            className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow border border-border hover:scale-110 transition-transform"
+          >
+            <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+          </button>
+          <button
+            type="button"
+            data-ocid="home.like_button"
+            onClick={handleLike}
+            className="w-16 h-16 rounded-full flex items-center justify-center shadow-card hover:scale-110 transition-transform active:scale-95 flare-gradient-soft"
+          >
+            <Heart className="w-7 h-7 text-white fill-white" />
+          </button>
+        </div>
+
+        {/* Nearby scroll */}
+        <div className="w-full mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-bold text-foreground">Nearby 📍</span>
+            <button
+              type="button"
+              data-ocid="home.nearby.see_all_button"
+              onClick={() => toast.success("Showing all nearby users 📍")}
+              className="text-xs text-primary font-semibold hover:underline"
+            >
+              See all
+            </button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+            {mockProfiles.map((p, i) => (
+              <div
+                key={p.id}
+                data-ocid={`home.nearby.item.${i + 1}`}
+                className="flex-shrink-0 flex flex-col items-center gap-1"
+              >
+                <div className="relative">
+                  <div
+                    className={`relative w-12 h-12 rounded-full overflow-hidden border-2 ${i % 2 === 0 ? "border-flare-pink" : "border-flare-orange"}`}
+                  >
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScreen("chat")}
+                    className="absolute -bottom-0.5 -right-0.5 w-4 h-4 flare-gradient rounded-full flex items-center justify-center border border-white"
+                  >
+                    <MessageCircle className="w-2 h-2 text-white" />
+                  </button>
+                </div>
+                <span className="text-xs font-medium text-foreground/80 w-12 text-center truncate">
+                  {p.name}
                 </span>
               </div>
-              <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-black/50 rounded-full px-1.5 py-0.5">
-                <Eye className="w-2.5 h-2.5 text-white" />
-                <span className="text-white text-xs">
-                  {stream.viewers.toLocaleString()}
-                </span>
-              </div>
-              <div className="absolute bottom-2 left-2 right-2">
-                <button
-                  type="button"
-                  data-ocid={`home.stream.name.${i + 1}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setScreen("profile");
-                  }}
-                  className="text-white font-black text-sm leading-tight hover:underline"
-                >
-                  {stream.name}
-                </button>
-                <p className="text-white/70 text-xs">{stream.topic}</p>
-                <p className="text-yellow-400 text-xs">
-                  🎁 {stream.gifts} gifts
-                </p>
-              </div>
-            </motion.button>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
-    </ScrollArea>
+
+      {/* Gift FAB */}
+      <button
+        type="button"
+        data-ocid="home.gift_button"
+        onClick={() => setGiftOpen(true)}
+        className="fixed bottom-24 right-6 w-14 h-14 flare-gradient rounded-full flex items-center justify-center shadow-glow z-40 hover:scale-110 transition-transform active:scale-95"
+      >
+        <Gift className="w-6 h-6 text-white" />
+      </button>
+      <GiftModal open={giftOpen} onClose={() => setGiftOpen(false)} />
+    </div>
   );
 }
 
 // ── Wallet Screen ─────────────────────────────────────────────────────────────
 function WalletScreen() {
-  const {
-    user,
-    setUser,
-    gameHistory,
-    openRechargeOnLoad,
-    setOpenRechargeOnLoad,
-  } = useApp();
+  const { user, setUser, gameHistory } = useApp();
   const [convertAmount, setConvertAmount] = useState("");
   const [rechargeOpen, setRechargeOpen] = useState(false);
   const [rechargeMethod, setRechargeMethod] = useState<"opay" | "paypal">(
@@ -868,17 +988,6 @@ function WalletScreen() {
   );
   const [selectedAmount, setSelectedAmount] = useState(0);
   const [processingPayment, setProcessingPayment] = useState(false);
-  const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawAccount, setWithdrawAccount] = useState("");
-
-  useEffect(() => {
-    if (openRechargeOnLoad) {
-      setPaymentOptionsOpen(true);
-      setOpenRechargeOnLoad(false);
-    }
-  }, [openRechargeOnLoad, setOpenRechargeOnLoad]);
 
   const diamondOutput = convertAmount ? Number(convertAmount) * 2 : 0;
 
@@ -1017,7 +1126,7 @@ function WalletScreen() {
               data-ocid="wallet.opay_button"
               onClick={() => {
                 setRechargeMethod("opay");
-                setPaymentOptionsOpen(true);
+                setRechargeOpen(true);
               }}
               className="flex items-center justify-center gap-2 bg-emerald-50 border-2 border-emerald-400 rounded-2xl p-4 hover:bg-emerald-100 transition-colors active:scale-95"
             >
@@ -1032,7 +1141,7 @@ function WalletScreen() {
               data-ocid="wallet.paypal_button"
               onClick={() => {
                 setRechargeMethod("paypal");
-                setPaymentOptionsOpen(true);
+                setRechargeOpen(true);
               }}
               className="flex items-center justify-center gap-2 bg-blue-50 border-2 border-blue-400 rounded-2xl p-4 hover:bg-blue-100 transition-colors active:scale-95"
             >
@@ -1192,135 +1301,6 @@ function WalletScreen() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Payment Options Modal */}
-      <Dialog
-        open={paymentOptionsOpen}
-        onOpenChange={(v) => !v && setPaymentOptionsOpen(false)}
-      >
-        <DialogContent
-          data-ocid="wallet.payment_options.modal"
-          className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden"
-        >
-          <div className="flare-gradient p-4">
-            <DialogTitle className="text-white font-black text-center text-lg">
-              {rechargeMethod === "opay" ? "🇳🇬 OPay" : "🌐 PayPal"} — Choose
-              Action
-            </DialogTitle>
-          </div>
-          <div className="p-5 bg-white space-y-3">
-            <p className="text-sm text-muted-foreground text-center mb-4">
-              What would you like to do with{" "}
-              {rechargeMethod === "opay" ? "OPay" : "PayPal"}?
-            </p>
-            <GradientButton
-              data-ocid="wallet.payment_options.buy_coins_button"
-              onClick={() => {
-                setPaymentOptionsOpen(false);
-                setRechargeOpen(true);
-              }}
-              className="w-full py-3.5 text-base"
-            >
-              🪙 Buy Coins
-            </GradientButton>
-            <button
-              type="button"
-              data-ocid="wallet.payment_options.withdraw_button"
-              onClick={() => {
-                setPaymentOptionsOpen(false);
-                setWithdrawOpen(true);
-              }}
-              className="w-full py-3.5 text-base border-2 border-primary text-primary font-bold rounded-full hover:bg-primary/5 transition-colors"
-            >
-              💸 Withdraw Funds
-            </button>
-            <button
-              type="button"
-              data-ocid="wallet.payment_options.cancel_button"
-              onClick={() => setPaymentOptionsOpen(false)}
-              className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Withdraw Modal */}
-      <Dialog
-        open={withdrawOpen}
-        onOpenChange={(v) => !v && setWithdrawOpen(false)}
-      >
-        <DialogContent
-          data-ocid="wallet.withdraw.modal"
-          className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden"
-        >
-          <div className="flare-gradient p-4">
-            <DialogTitle className="text-white font-black text-center text-lg">
-              💸 Withdraw Funds —{" "}
-              {rechargeMethod === "opay" ? "OPay" : "PayPal"}
-            </DialogTitle>
-          </div>
-          <div className="p-5 bg-white space-y-3">
-            <div>
-              <Label className="text-xs font-bold mb-1 block">Amount</Label>
-              <Input
-                data-ocid="wallet.withdraw.amount_input"
-                type="number"
-                placeholder="Enter amount"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="rounded-full"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-bold mb-1 block">
-                {rechargeMethod === "opay" ? "Account Number" : "PayPal Email"}
-              </Label>
-              <Input
-                data-ocid="wallet.withdraw.account_input"
-                placeholder={
-                  rechargeMethod === "opay" ? "Account number" : "PayPal email"
-                }
-                value={withdrawAccount}
-                onChange={(e) => setWithdrawAccount(e.target.value)}
-                className="rounded-full"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Withdrawals are processed within 1-3 business days
-            </p>
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                data-ocid="wallet.withdraw.cancel_button"
-                onClick={() => setWithdrawOpen(false)}
-                className="flex-1 border border-border rounded-full py-2.5 font-bold text-sm"
-              >
-                Cancel
-              </button>
-              <GradientButton
-                data-ocid="wallet.withdraw.confirm_button"
-                onClick={() => {
-                  if (!withdrawAmount || !withdrawAccount) {
-                    toast.error("Please fill all fields");
-                    return;
-                  }
-                  toast.success(
-                    "Withdrawal request submitted! 💸 We'll process it within 1-3 business days.",
-                  );
-                  setWithdrawAmount("");
-                  setWithdrawAccount("");
-                  setWithdrawOpen(false);
-                }}
-                className="flex-1"
-              >
-                Confirm 💸
-              </GradientButton>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </ScrollArea>
   );
 }
@@ -1330,7 +1310,7 @@ function LiveStreamView({
   streamId,
   onBack,
 }: { streamId: number; onBack: () => void }) {
-  const { user, setUser, setScreen, setOpenRechargeOnLoad } = useApp();
+  const { user, setUser, setScreen } = useApp();
   const [giftOpen, setGiftOpen] = useState(false);
   const [floatingGift, setFloatingGift] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -1371,6 +1351,7 @@ function LiveStreamView({
       ]);
     }, 2500);
     return () => clearInterval(t);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: intentional interval
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional scroll
@@ -1395,9 +1376,7 @@ function LiveStreamView({
 
   const sendStreamGift = (icon: string, cost: number) => {
     if (user.coins < cost) {
-      toast.error("Not enough coins! Redirecting to wallet... 🪙");
-      setOpenRechargeOnLoad(true);
-      setScreen("wallet");
+      toast.error("Not enough coins!");
       return;
     }
     setUser({ ...user, coins: user.coins - cost });
@@ -1565,496 +1544,101 @@ function LiveStreamView({
   );
 }
 
-// ── Discover Screen (Swipe + Messages) ─────────────────────────────────────
-function DiscoverScreen() {
-  const {
-    user,
-    conversations,
-    setConversations,
-    selectedConversationId,
-    setSelectedConversationId,
-  } = useApp();
-  const [tab, setTab] = useState<"swipe" | "messages">("swipe");
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [giftOpen, setGiftOpen] = useState(false);
-  const [direction, setDirection] = useState(0);
-  const [input, setInput] = useState("");
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const endRef = useRef<HTMLDivElement>(null);
-  const profiles = mockProfiles;
+// ── Live Screen ───────────────────────────────────────────────────────────────
+function LiveScreen() {
+  const { activeLiveStream, setActiveLiveStream, setScreen, user } = useApp();
 
-  const handleSkip = () => {
-    setDirection(-1);
-    setCurrentIdx((i) => (i + 1) % profiles.length);
-  };
-  const handleLike = () => {
-    setDirection(1);
-    toast.success(`You liked ${profiles[currentIdx].name}! 💕`);
-    setCurrentIdx((i) => (i + 1) % profiles.length);
-  };
-
-  const topProfile = profiles[currentIdx];
-  const nextProfile = profiles[(currentIdx + 1) % profiles.length];
-  const nextNext = profiles[(currentIdx + 2) % profiles.length];
-
-  const openChat = (profileName: string) => {
-    const conv = conversations.find((c) => c.name === profileName);
-    if (conv) {
-      setSelectedConversationId(conv.id);
-    }
-    setTab("messages");
-  };
-
-  const activeConv =
-    selectedConversationId !== null
-      ? (conversations.find((c) => c.id === selectedConversationId) ?? null)
-      : null;
-
-  const sendMsg = () => {
-    if (!input.trim() || !activeConv) return;
-    const newMsg: Message = {
-      id: Date.now(),
-      from: "You",
-      text: input,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      mine: true,
-      replyTo: replyTo ?? undefined,
-    };
-    const updatedConvs = conversations.map((c) =>
-      c.id === activeConv.id
-        ? {
-            ...c,
-            messages: [...c.messages, newMsg],
-            lastMessage: input,
-            lastTime: "now",
-            unread: 0,
-          }
-        : c,
+  if (activeLiveStream !== null) {
+    return (
+      <LiveStreamView
+        streamId={activeLiveStream}
+        onBack={() => setActiveLiveStream(null)}
+      />
     );
-    setConversations(updatedConvs);
-    setInput("");
-    setReplyTo(null);
-    setTimeout(() => {
-      const replies = [
-        "That sounds great! 😊",
-        "Can't wait! 💕",
-        "You're so sweet 🥰",
-        "Let's do it! 🎉",
-        "Miss you 💕",
-        "Haha 😄",
-        "So true! ✨",
-      ];
-      const reply: Message = {
-        id: Date.now() + 1,
-        from: activeConv.name,
-        text: replies[Math.floor(Math.random() * replies.length)],
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        mine: false,
-      };
-      setConversations(
-        conversations.map((c) =>
-          c.id === activeConv.id
-            ? {
-                ...c,
-                messages: [...c.messages, reply],
-                lastMessage: reply.text,
-                lastTime: "now",
-              }
-            : c,
-        ),
-      );
-    }, 1200);
-  };
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional scroll
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConv?.messages]);
+  }
 
   return (
-    <div
-      className="flex flex-col h-full bg-background"
-      data-ocid="discover.page"
-    >
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-4 pb-2 bg-background border-b border-border">
-        <div className="flex items-center gap-2">
-          <Compass className="w-5 h-5 text-flare-pink" />
-          <span className="text-xl font-black flare-gradient-text">
-            Discover
-          </span>
-        </div>
-        <div className="flex gap-1 bg-secondary rounded-full p-1">
+    <ScrollArea className="h-full" data-ocid="live.page">
+      <div className="p-4 pb-24">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-black">🔴 Live Now</h1>
           <button
             type="button"
-            data-ocid="discover.swipe_tab"
-            onClick={() => setTab("swipe")}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${tab === "swipe" ? "flare-gradient text-white shadow" : "text-muted-foreground"}`}
-          >
-            Swipe 💕
-          </button>
-          <button
-            type="button"
-            data-ocid="discover.messages_tab"
+            data-ocid="live.go_live_button"
             onClick={() => {
-              setTab("messages");
-              setSelectedConversationId(null);
+              if (user.role === "host") {
+                toast.success("🔴 Starting your live stream...");
+              } else {
+                toast.error(
+                  "You need Host status to go live! Recharge ₦30,000+ to become a host.",
+                );
+              }
             }}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${tab === "messages" ? "flare-gradient text-white shadow" : "text-muted-foreground"}`}
+            className="flare-gradient text-white text-xs font-bold rounded-full px-3 py-1.5 flex items-center gap-1"
           >
-            Messages 💬
+            <Video className="w-3 h-3" /> Go Live
           </button>
         </div>
-        <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 rounded-full px-2 py-1">
-          <span className="text-xs">🪙</span>
-          <span className="text-xs font-bold text-yellow-600">
-            {user.coins.toLocaleString()}
-          </span>
-        </div>
-      </header>
 
-      {/* Swipe Tab */}
-      {tab === "swipe" && (
-        <div className="flex-1 flex flex-col items-center px-4 pt-2 pb-4 overflow-hidden">
-          <div className="relative w-full flex-1" style={{ maxHeight: 420 }}>
-            {/* Back cards */}
-            <div
-              className="absolute inset-0 top-4 mx-4 rounded-3xl overflow-hidden shadow"
-              style={{
-                background: "linear-gradient(135deg, #FF2B7A20, #FF8A0020)",
-                transform: "scale(0.94) translateY(8px)",
-              }}
+        <div className="grid grid-cols-2 gap-3">
+          {mockStreams.map((stream, i) => (
+            <motion.button
+              key={stream.id}
+              data-ocid={`live.stream.item.${i + 1}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              onClick={() => setActiveLiveStream(stream.id)}
+              className="relative rounded-3xl overflow-hidden aspect-[3/4] shadow-card text-left"
             >
               <img
-                src={nextNext.image}
-                alt={nextNext.name}
-                className="w-full h-full object-cover opacity-60"
+                src={stream.image}
+                alt={stream.name}
+                className="w-full h-full object-cover"
               />
-            </div>
-            <div
-              className="absolute inset-0 top-2 mx-2 rounded-3xl overflow-hidden shadow-lg"
-              style={{ transform: "scale(0.97) translateY(4px)" }}
-            >
-              <img
-                src={nextProfile.image}
-                alt={nextProfile.name}
-                className="w-full h-full object-cover opacity-80"
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 50%)",
+                }}
               />
-            </div>
-            {/* Top card */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentIdx}
-                initial={{
-                  opacity: 0,
-                  x: direction * 100,
-                  rotate: direction * 8,
-                }}
-                animate={{ opacity: 1, x: 0, rotate: 0 }}
-                exit={{
-                  opacity: 0,
-                  x: direction * -200,
-                  rotate: direction * -12,
-                }}
-                transition={{ type: "spring", stiffness: 260, damping: 25 }}
-                className="absolute inset-0 rounded-3xl overflow-hidden shadow-2xl cursor-grab"
-              >
-                <img
-                  src={topProfile.image}
-                  alt={topProfile.name}
-                  className="w-full h-full object-cover"
-                />
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background:
-                      "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%)",
-                  }}
-                />
-                <div className="absolute top-4 left-4 flex gap-2">
-                  {topProfile.hot && (
-                    <Badge className="flare-gradient text-white border-0 text-xs font-black">
-                      🔥 Hot
-                    </Badge>
-                  )}
-                  {topProfile.verified && (
-                    <Badge className="bg-emerald-500 text-white border-0 text-xs font-black">
-                      ✓ Verified
-                    </Badge>
-                  )}
-                </div>
-                <div className="absolute bottom-4 left-4 right-4">
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <h3 className="text-white font-black text-xl">
-                        {topProfile.name}, {topProfile.age}
-                      </h3>
-                      <p className="text-white/80 text-sm flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {topProfile.location}
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-1 items-end">
-                      <DiamondBadge amount={topProfile.diamonds} />
-                    </div>
-                  </div>
-                </div>
-                {/* Message button */}
+              {/* LIVE badge */}
+              <div className="absolute top-2 left-2 flex items-center gap-1">
+                <span className="pulse-live bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full">
+                  LIVE
+                </span>
+              </div>
+              {/* Viewer count */}
+              <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-black/50 rounded-full px-1.5 py-0.5">
+                <Eye className="w-2.5 h-2.5 text-white" />
+                <span className="text-white text-xs">
+                  {stream.viewers.toLocaleString()}
+                </span>
+              </div>
+              {/* Info */}
+              <div className="absolute bottom-2 left-2 right-2">
                 <button
                   type="button"
-                  data-ocid="discover.card.message_button"
+                  data-ocid={`live.stream.name.${i + 1}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    openChat(topProfile.name);
+                    setScreen("profile");
                   }}
-                  className="absolute bottom-16 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full flex items-center justify-center"
+                  className="text-white font-black text-sm leading-tight hover:underline"
                 >
-                  <MessageCircle className="w-5 h-5 text-white" />
+                  {stream.name}
                 </button>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center justify-center gap-8 mt-4">
-            <button
-              type="button"
-              data-ocid="discover.skip_button"
-              onClick={handleSkip}
-              className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-card border-2 border-border hover:scale-110 transition-transform active:scale-95"
-            >
-              <X className="w-7 h-7 text-muted-foreground" />
-            </button>
-            <button
-              type="button"
-              data-ocid="discover.superlike_button"
-              className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow border border-border hover:scale-110 transition-transform"
-            >
-              <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-            </button>
-            <button
-              type="button"
-              data-ocid="discover.like_button"
-              onClick={handleLike}
-              className="w-16 h-16 rounded-full flex items-center justify-center shadow-card hover:scale-110 transition-transform active:scale-95 flare-gradient-soft"
-            >
-              <Heart className="w-7 h-7 text-white fill-white" />
-            </button>
-          </div>
-
-          {/* Nearby scroll */}
-          <div className="w-full mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold text-foreground">
-                Nearby 📍
-              </span>
-              <button
-                type="button"
-                data-ocid="discover.nearby.see_all_button"
-                onClick={() => toast.success("Showing all nearby users 📍")}
-                className="text-xs text-primary font-semibold hover:underline"
-              >
-                See all
-              </button>
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-              {mockProfiles.map((p, i) => (
-                <div
-                  key={p.id}
-                  data-ocid={`discover.nearby.item.${i + 1}`}
-                  className="flex-shrink-0 flex flex-col items-center gap-1"
-                >
-                  <div className="relative">
-                    <div
-                      className={`relative w-12 h-12 rounded-full overflow-hidden border-2 ${i % 2 === 0 ? "border-flare-pink" : "border-flare-orange"}`}
-                    >
-                      <img
-                        src={p.image}
-                        alt={p.name}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => openChat(p.name)}
-                      className="absolute -bottom-0.5 -right-0.5 w-4 h-4 flare-gradient rounded-full flex items-center justify-center border border-white"
-                    >
-                      <MessageCircle className="w-2 h-2 text-white" />
-                    </button>
-                  </div>
-                  <span className="text-xs font-medium text-foreground/80 w-12 text-center truncate">
-                    {p.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+                <p className="text-white/70 text-xs">{stream.topic}</p>
+                <p className="text-yellow-400 text-xs">
+                  🎁 {stream.gifts} gifts
+                </p>
+              </div>
+            </motion.button>
+          ))}
         </div>
-      )}
-
-      {/* Messages Tab */}
-      {tab === "messages" && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {activeConv ? (
-            /* Thread view */
-            <div className="flex flex-col h-full">
-              <div className="flex items-center gap-3 p-4 bg-card border-b border-border">
-                <button
-                  type="button"
-                  data-ocid="discover.chat.back_button"
-                  onClick={() => setSelectedConversationId(null)}
-                  className="w-8 h-8 flex items-center justify-center"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <Avatar className="w-10 h-10">
-                  <AvatarImage src={activeConv.avatar} />
-                  <AvatarFallback>{activeConv.name[0]}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-black">{activeConv.name}</p>
-                  <p
-                    className={`text-xs font-medium ${activeConv.online ? "text-emerald-500" : "text-muted-foreground"}`}
-                  >
-                    {activeConv.online ? "● Online" : "● Offline"}
-                  </p>
-                </div>
-              </div>
-
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-3">
-                  {activeConv.messages.map((m, i) => (
-                    <div
-                      key={m.id}
-                      data-ocid={`discover.chat.message.item.${i + 1}`}
-                      className={`flex ${m.mine ? "justify-end" : "justify-start"}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!m.mine) setReplyTo(m.text);
-                        }}
-                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-left ${m.mine ? "flare-gradient-soft text-white" : "bg-card border border-border hover:border-flare-pink transition-colors"}`}
-                      >
-                        {m.replyTo && (
-                          <div className="bg-black/10 rounded-xl px-2 py-1 mb-1 border-l-2 border-flare-pink">
-                            <p className="text-xs opacity-70 line-clamp-1">
-                              ↩ {m.replyTo}
-                            </p>
-                          </div>
-                        )}
-                        <p className="text-sm">{m.text}</p>
-                        <p
-                          className={`text-xs mt-0.5 ${m.mine ? "text-white/60" : "text-muted-foreground"}`}
-                        >
-                          {m.time}
-                        </p>
-                      </button>
-                    </div>
-                  ))}
-                  <div ref={endRef} />
-                </div>
-              </ScrollArea>
-
-              {replyTo && (
-                <div className="mx-3 px-3 py-2 bg-pink-50 border border-pink-200 rounded-2xl flex items-center gap-2">
-                  <span className="text-xs text-flare-pink font-bold flex-shrink-0">
-                    ↩ Replying to:
-                  </span>
-                  <span className="text-xs text-muted-foreground flex-1 truncate">
-                    {replyTo.slice(0, 40)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setReplyTo(null)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-
-              <div className="p-3 border-t border-border flex gap-2">
-                <Input
-                  data-ocid="discover.chat.message_input"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendMsg()}
-                  placeholder="Type a message..."
-                  className="rounded-full flex-1"
-                />
-                <button
-                  type="button"
-                  data-ocid="discover.chat.send_button"
-                  onClick={sendMsg}
-                  className="w-10 h-10 flare-gradient-soft rounded-full flex items-center justify-center flex-shrink-0"
-                >
-                  <Send className="w-4 h-4 text-white" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Inbox list */
-            <ScrollArea className="flex-1">
-              <div className="p-3 space-y-1 pb-8">
-                {conversations.map((conv, i) => (
-                  <button
-                    key={conv.id}
-                    type="button"
-                    data-ocid={`discover.messages.item.${i + 1}`}
-                    onClick={() => {
-                      setSelectedConversationId(conv.id);
-                      setConversations(
-                        conversations.map((c) =>
-                          c.id === conv.id ? { ...c, unread: 0 } : c,
-                        ),
-                      );
-                    }}
-                    className="w-full flex items-center gap-3 rounded-2xl p-3 hover:bg-secondary transition-colors text-left"
-                  >
-                    <div className="relative flex-shrink-0">
-                      <Avatar className="w-12 h-12">
-                        <AvatarImage src={conv.avatar} />
-                        <AvatarFallback>{conv.name[0]}</AvatarFallback>
-                      </Avatar>
-                      {conv.online && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-black text-sm">{conv.name}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {conv.lastTime}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {conv.lastMessage}
-                      </p>
-                    </div>
-                    {conv.unread > 0 && (
-                      <div className="w-5 h-5 flare-gradient rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-[10px] font-bold">
-                          {conv.unread}
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
-      )}
-      <GiftModal open={giftOpen} onClose={() => setGiftOpen(false)} />
-    </div>
+      </div>
+    </ScrollArea>
   );
 }
 
@@ -2345,194 +1929,54 @@ function GamesScreen() {
 
 // ── Chat Screen ───────────────────────────────────────────────────────────────
 function ChatScreen({ onBack }: { onBack: () => void }) {
-  const {
-    conversations,
-    setConversations,
-    selectedConversationId,
-    setSelectedConversationId,
-  } = useApp();
+  const [messages, setMessages] = useState(mockMessages);
   const [input, setInput] = useState("");
-  const [replyTo, setReplyTo] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  const activeConv =
-    selectedConversationId !== null
-      ? (conversations.find((c) => c.id === selectedConversationId) ?? null)
-      : null;
-
   const sendMsg = () => {
-    if (!input.trim() || !activeConv) return;
-    const newMsg: Message = {
-      id: Date.now(),
-      from: "You",
-      text: input,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      mine: true,
-      replyTo: replyTo ?? undefined,
-    };
-    const updatedConvs = conversations.map((c) =>
-      c.id === activeConv.id
-        ? {
-            ...c,
-            messages: [...c.messages, newMsg],
-            lastMessage: input,
-            lastTime: "now",
-            unread: 0,
-          }
-        : c,
-    );
-    setConversations(updatedConvs);
+    if (!input.trim()) return;
+    setMessages((m) => [
+      ...m,
+      {
+        id: Date.now(),
+        from: "You",
+        text: input,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        mine: true,
+      },
+    ]);
     setInput("");
-    setReplyTo(null);
     setTimeout(() => {
       const replies = [
         "That sounds great! 😊",
         "Can't wait! 💕",
         "You're so sweet 🥰",
         "Let's do it! 🎉",
-        "Miss you 💕",
-        "Haha 😄",
-        "So true! ✨",
       ];
-      const reply: Message = {
-        id: Date.now() + 1,
-        from: activeConv.name,
-        text: replies[Math.floor(Math.random() * replies.length)],
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        mine: false,
-      };
-      setConversations(
-        conversations.map((c) =>
-          c.id === activeConv.id
-            ? {
-                ...c,
-                messages: [...c.messages, reply],
-                lastMessage: reply.text,
-                lastTime: "now",
-              }
-            : c,
-        ),
-      );
+      setMessages((m) => [
+        ...m,
+        {
+          id: Date.now() + 1,
+          from: "Sofia",
+          text: replies[Math.floor(Math.random() * replies.length)],
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          mine: false,
+        },
+      ]);
     }, 1200);
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConv?.messages]);
+  }, [messages]);
 
-  // Conversation thread view
-  if (activeConv) {
-    return (
-      <div
-        className="flex flex-col h-full bg-background"
-        data-ocid="chat.thread.page"
-      >
-        <div className="flex items-center gap-3 p-4 bg-card border-b border-border">
-          <button
-            type="button"
-            data-ocid="chat.thread.back_button"
-            onClick={() => setSelectedConversationId(null)}
-            className="w-8 h-8 flex items-center justify-center"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <Avatar className="w-10 h-10">
-            <AvatarImage src={activeConv.avatar} />
-            <AvatarFallback>{activeConv.name[0]}</AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-black">{activeConv.name}</p>
-            <p
-              className={`text-xs font-medium ${activeConv.online ? "text-emerald-500" : "text-muted-foreground"}`}
-            >
-              {activeConv.online ? "● Online" : "● Offline"}
-            </p>
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-3">
-            {activeConv.messages.map((m, i) => (
-              <div
-                key={m.id}
-                data-ocid={`chat.message.item.${i + 1}`}
-                className={`flex ${m.mine ? "justify-end" : "justify-start"}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!m.mine) setReplyTo(m.text);
-                  }}
-                  className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-left ${m.mine ? "flare-gradient-soft text-white" : "bg-card border border-border hover:border-flare-pink transition-colors"}`}
-                >
-                  {m.replyTo && (
-                    <div className="bg-black/10 rounded-xl px-2 py-1 mb-1 border-l-2 border-flare-pink">
-                      <p className="text-xs opacity-70 line-clamp-1">
-                        ↩ {m.replyTo}
-                      </p>
-                    </div>
-                  )}
-                  <p className="text-sm">{m.text}</p>
-                  <p
-                    className={`text-xs mt-0.5 ${m.mine ? "text-white/60" : "text-muted-foreground"}`}
-                  >
-                    {m.time}
-                  </p>
-                </button>
-              </div>
-            ))}
-            <div ref={endRef} />
-          </div>
-        </ScrollArea>
-
-        {replyTo && (
-          <div className="mx-3 px-3 py-2 bg-pink-50 border border-pink-200 rounded-2xl flex items-center gap-2">
-            <span className="text-xs text-flare-pink font-bold flex-shrink-0">
-              ↩ Replying to:
-            </span>
-            <span className="text-xs text-muted-foreground flex-1 truncate">
-              {replyTo.slice(0, 40)}
-            </span>
-            <button
-              type="button"
-              onClick={() => setReplyTo(null)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-
-        <div className="p-3 border-t border-border flex gap-2">
-          <Input
-            data-ocid="chat.message_input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMsg()}
-            placeholder="Type a message..."
-            className="rounded-full flex-1"
-          />
-          <button
-            type="button"
-            data-ocid="chat.send_button"
-            onClick={sendMsg}
-            className="w-10 h-10 flare-gradient-soft rounded-full flex items-center justify-center flex-shrink-0"
-          >
-            <Send className="w-4 h-4 text-white" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Inbox list view
   return (
     <div className="flex flex-col h-full bg-background" data-ocid="chat.page">
       <div className="flex items-center gap-3 p-4 bg-card border-b border-border">
@@ -2544,58 +1988,62 @@ function ChatScreen({ onBack }: { onBack: () => void }) {
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-black text-lg flex-1">💬 Chat Inbox</h1>
+        <Avatar className="w-10 h-10">
+          <AvatarImage src="/assets/generated/profile-sofia.dim_400x500.jpg" />
+          <AvatarFallback>S</AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="font-black">Sofia</p>
+          <p className="text-xs text-emerald-500 font-medium">● Online</p>
+        </div>
+        <div className="ml-auto flex items-center gap-1 text-xs text-cyan-500 font-bold">
+          <span>💎</span>
+          <span>450</span>
+        </div>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-3 space-y-1 pb-8">
-          {conversations.map((conv, i) => (
-            <button
-              key={conv.id}
-              type="button"
-              data-ocid={`chat.inbox.item.${i + 1}`}
-              onClick={() => {
-                setSelectedConversationId(conv.id);
-                // Clear unread
-                setConversations(
-                  conversations.map((c) =>
-                    c.id === conv.id ? { ...c, unread: 0 } : c,
-                  ),
-                );
-              }}
-              className="w-full flex items-center gap-3 rounded-2xl p-3 hover:bg-secondary transition-colors text-left"
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-3">
+          {messages.map((m, i) => (
+            <div
+              key={m.id}
+              data-ocid={`chat.message.item.${i + 1}`}
+              className={`flex ${m.mine ? "justify-end" : "justify-start"}`}
             >
-              <div className="relative flex-shrink-0">
-                <Avatar className="w-12 h-12">
-                  <AvatarImage src={conv.avatar} />
-                  <AvatarFallback>{conv.name[0]}</AvatarFallback>
-                </Avatar>
-                {conv.online && (
-                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="font-black text-sm">{conv.name}</p>
-                  <span className="text-xs text-muted-foreground">
-                    {conv.lastTime}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground truncate">
-                  {conv.lastMessage}
+              <div
+                className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${m.mine ? "flare-gradient-soft text-white" : "bg-card border border-border"}`}
+              >
+                <p className="text-sm">{m.text}</p>
+                <p
+                  className={`text-xs mt-0.5 ${m.mine ? "text-white/60" : "text-muted-foreground"}`}
+                >
+                  {m.time}
                 </p>
               </div>
-              {conv.unread > 0 && (
-                <div className="w-5 h-5 flare-gradient rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-[10px] font-bold">
-                    {conv.unread}
-                  </span>
-                </div>
-              )}
-            </button>
+            </div>
           ))}
+          <div ref={endRef} />
         </div>
       </ScrollArea>
+
+      <div className="p-3 border-t border-border flex gap-2">
+        <Input
+          data-ocid="chat.message_input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendMsg()}
+          placeholder="Type a message..."
+          className="rounded-full flex-1"
+        />
+        <button
+          type="button"
+          data-ocid="chat.send_button"
+          onClick={sendMsg}
+          className="w-10 h-10 flare-gradient-soft rounded-full flex items-center justify-center flex-shrink-0"
+        >
+          <Send className="w-4 h-4 text-white" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -2603,203 +2051,54 @@ function ChatScreen({ onBack }: { onBack: () => void }) {
 // ── Agency Screen ─────────────────────────────────────────────────────────────
 function AgencyScreen({ onBack }: { onBack: () => void }) {
   const { user } = useApp();
-  const [activeTab, setActiveTab] = useState<"agency" | "family">("agency");
-
-  // Agency state
-  const [agencyName, setAgencyName] = useState("FlareUp Stars");
-  const [editingAgencyName, setEditingAgencyName] = useState(false);
-  const [agencyNameDraft, setAgencyNameDraft] = useState("FlareUp Stars");
-  const [agencyMembers, setAgencyMembers] = useState([
-    {
-      id: 1,
-      name: "Amara",
-      role: "host" as Role,
-      avatar: "/assets/generated/profile-amara.dim_400x500.jpg",
-    },
-    {
-      id: 2,
-      name: "Sofia",
-      role: "user" as Role,
-      avatar: "/assets/generated/profile-sofia.dim_400x500.jpg",
-    },
-    {
-      id: 3,
-      name: "Zara",
-      role: "host" as Role,
-      avatar: "/assets/generated/profile-zara.dim_400x500.jpg",
-    },
-    {
-      id: 4,
-      name: "Nadia",
-      role: "host" as Role,
-      avatar: "/assets/generated/profile-amara.dim_400x500.jpg",
-    },
-  ]);
-  const [showAddAgency, setShowAddAgency] = useState(false);
-  const [newAgencyMember, setNewAgencyMember] = useState({
-    name: "",
-    role: "user" as Role,
-  });
-
-  // Family state
-  const [familyName, setFamilyName] = useState("Love Family");
-  const [editingFamilyName, setEditingFamilyName] = useState(false);
-  const [familyNameDraft, setFamilyNameDraft] = useState("Love Family");
-  const [familyMembers, setFamilyMembers] = useState([
-    {
-      id: 1,
-      name: "Chioma",
-      role: "user" as Role,
-      avatar: "/assets/generated/profile-sofia.dim_400x500.jpg",
-    },
-    {
-      id: 2,
-      name: "Priya",
-      role: "host" as Role,
-      avatar: "/assets/generated/profile-zara.dim_400x500.jpg",
-    },
-    {
-      id: 3,
-      name: "Mei Lin",
-      role: "user" as Role,
-      avatar: "/assets/generated/profile-amara.dim_400x500.jpg",
-    },
-    {
-      id: 4,
-      name: "Aisha",
-      role: "user" as Role,
-      avatar: "/assets/generated/profile-sofia.dim_400x500.jpg",
-    },
-  ]);
-  const [showAddFamily, setShowAddFamily] = useState(false);
-  const [newFamilyMember, setNewFamilyMember] = useState({
-    name: "",
-    role: "user" as Role,
-  });
-
-  const isAgency = activeTab === "agency";
-  const members = isAgency ? agencyMembers : familyMembers;
-  const setMembers = isAgency ? setAgencyMembers : setFamilyMembers;
-  const groupName = isAgency ? agencyName : familyName;
+  const [groupType, setGroupType] = useState<"agency" | "family">("agency");
+  const [members, setMembers] = useState(mockAgencyMembers);
 
   const removeMember = (id: number) => {
     setMembers((m) => m.filter((mem) => mem.id !== id));
     toast.success("Member removed");
   };
 
-  const addMember = () => {
-    const newName = isAgency ? newAgencyMember.name : newFamilyMember.name;
-    const newRole = isAgency ? newAgencyMember.role : newFamilyMember.role;
-    if (!newName.trim()) {
-      toast.error("Please enter a name");
-      return;
-    }
-    const newMem = {
-      id: Date.now(),
-      name: newName.trim(),
-      role: newRole,
-      avatar: "/assets/generated/profile-amara.dim_400x500.jpg",
-    };
-    setMembers((m) => [...m, newMem]);
-    if (isAgency) {
-      setNewAgencyMember({ name: "", role: "user" });
-      setShowAddAgency(false);
-    } else {
-      setNewFamilyMember({ name: "", role: "user" });
-      setShowAddFamily(false);
-    }
-    toast.success(`${newName} added! 🎉`);
-  };
-
   return (
     <div className="flex flex-col h-full bg-background" data-ocid="agency.page">
       <div className="flex items-center gap-3 p-4 bg-card border-b border-border">
-        <button
-          type="button"
-          data-ocid="agency.back_button"
-          onClick={onBack}
-          className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
-        >
+        <button type="button" data-ocid="agency.back_button" onClick={onBack}>
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="font-black text-lg">Agency & Family</h1>
       </div>
 
-      {/* Tabs */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="flex bg-secondary rounded-full p-1">
-          {(["agency", "family"] as const).map((t) => (
-            <button
-              type="button"
-              key={t}
-              data-ocid={`agency.${t}_tab`}
-              onClick={() => setActiveTab(t)}
-              className={`flex-1 rounded-full py-2 text-sm font-bold transition-all ${activeTab === t ? "flare-gradient-soft text-white shadow" : "text-muted-foreground"}`}
-            >
-              {t === "agency" ? "🏢 Agency" : "👨‍👩‍👧 Family"}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <ScrollArea className="flex-1">
         <div className="p-4 pb-24 space-y-4">
-          {/* Group Info Banner */}
+          {/* Toggle */}
+          <div className="flex bg-secondary rounded-full p-1">
+            {(["agency", "family"] as const).map((t) => (
+              <button
+                type="button"
+                key={t}
+                data-ocid={`agency.${t}_tab`}
+                onClick={() => setGroupType(t)}
+                className={`flex-1 rounded-full py-2 text-sm font-bold transition-all ${
+                  groupType === t
+                    ? "flare-gradient-soft text-white shadow"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {t === "agency" ? "🏢 Agency" : "👨‍👩‍👧 Family"}
+              </button>
+            ))}
+          </div>
+
+          {/* Group Info */}
           <div className="flare-gradient rounded-3xl p-4 text-white">
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl">
-                {isAgency ? "🏢" : "💞"}
+                {groupType === "agency" ? "🏢" : "💞"}
               </div>
-              <div className="flex-1 min-w-0">
-                {(isAgency ? editingAgencyName : editingFamilyName) ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={isAgency ? agencyNameDraft : familyNameDraft}
-                      onChange={(e) =>
-                        isAgency
-                          ? setAgencyNameDraft(e.target.value)
-                          : setFamilyNameDraft(e.target.value)
-                      }
-                      className="bg-white/20 border border-white/40 rounded-full px-3 py-1 text-white font-black text-base w-full focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isAgency) {
-                          setAgencyName(agencyNameDraft);
-                          setEditingAgencyName(false);
-                        } else {
-                          setFamilyName(familyNameDraft);
-                          setEditingFamilyName(false);
-                        }
-                        toast.success("Name updated! ✨");
-                      }}
-                      className="bg-white/30 text-white text-xs font-bold rounded-full px-3 py-1 flex-shrink-0"
-                    >
-                      Save
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <p className="font-black text-lg truncate">{groupName}</p>
-                    <button
-                      type="button"
-                      data-ocid={`agency.${activeTab}_name_edit_button`}
-                      onClick={() => {
-                        if (isAgency) {
-                          setAgencyNameDraft(agencyName);
-                          setEditingAgencyName(true);
-                        } else {
-                          setFamilyNameDraft(familyName);
-                          setEditingFamilyName(true);
-                        }
-                      }}
-                      className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0"
-                    >
-                      ✏️
-                    </button>
-                  </div>
-                )}
+              <div>
+                <p className="font-black text-lg">
+                  {groupType === "agency" ? "FlareUp Stars" : "Love Family"}
+                </p>
                 <p className="text-white/70 text-sm">
                   Manager: {user.name || "You"}
                 </p>
@@ -2816,13 +2115,11 @@ function AgencyScreen({ onBack }: { onBack: () => void }) {
               <h3 className="font-black">Members</h3>
               <button
                 type="button"
-                data-ocid={`agency.${activeTab}_add_button`}
-                onClick={() =>
-                  isAgency ? setShowAddAgency(true) : setShowAddFamily(true)
-                }
+                data-ocid="agency.invite_button"
+                onClick={() => toast.success("Invite link copied! 🔗")}
                 className="flex items-center gap-1 flare-gradient-soft text-white text-xs font-bold rounded-full px-3 py-1.5"
               >
-                <Plus className="w-3 h-3" /> Add Member
+                <Plus className="w-3 h-3" /> Invite
               </button>
             </div>
             <div className="space-y-3">
@@ -2840,7 +2137,11 @@ function AgencyScreen({ onBack }: { onBack: () => void }) {
                     <div>
                       <p className="font-bold text-sm">{m.name}</p>
                       <span
-                        className={`text-xs font-bold rounded-full px-2 py-0.5 ${m.role === "host" ? "bg-yellow-100 text-yellow-700" : "bg-pink-100 text-pink-700"}`}
+                        className={`text-xs font-bold rounded-full px-2 py-0.5 ${
+                          m.role === "host"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-pink-100 text-pink-700"
+                        }`}
                       >
                         {m.role}
                       </span>
@@ -2850,105 +2151,26 @@ function AgencyScreen({ onBack }: { onBack: () => void }) {
                     type="button"
                     data-ocid={`agency.remove_button.${i + 1}`}
                     onClick={() => removeMember(m.id)}
-                    className="w-8 h-8 flex items-center justify-center text-red-400 hover:bg-red-50 rounded-full transition-colors"
+                    className="text-xs text-red-500 border border-red-200 rounded-full px-2.5 py-1 hover:bg-red-50 transition-colors"
                   >
-                    <X className="w-4 h-4" />
+                    Remove
                   </button>
                 </div>
               ))}
-              {members.length === 0 && (
-                <div
-                  data-ocid="agency.members.empty_state"
-                  className="text-center py-6 text-muted-foreground"
-                >
-                  <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No members yet</p>
-                </div>
-              )}
             </div>
           </div>
+
+          <button
+            type="button"
+            data-ocid="agency.create_button"
+            onClick={() => toast.success(`New ${groupType} group created! 🎉`)}
+            className="w-full border-2 border-dashed border-primary/40 rounded-3xl p-4 text-primary font-bold flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors"
+          >
+            <Plus className="w-5 h-5" /> Create New{" "}
+            {groupType === "agency" ? "Agency" : "Family"}
+          </button>
         </div>
       </ScrollArea>
-
-      {/* Add Member Dialog */}
-      <Dialog
-        open={isAgency ? showAddAgency : showAddFamily}
-        onOpenChange={(v) =>
-          isAgency ? setShowAddAgency(v) : setShowAddFamily(v)
-        }
-      >
-        <DialogContent
-          data-ocid="agency.add_member.modal"
-          className="max-w-sm rounded-3xl"
-        >
-          <DialogHeader>
-            <DialogTitle className="font-black">➕ Add Member</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs font-bold mb-1 block">Name</Label>
-              <Input
-                data-ocid="agency.add_member.name_input"
-                placeholder="Member name"
-                value={isAgency ? newAgencyMember.name : newFamilyMember.name}
-                onChange={(e) =>
-                  isAgency
-                    ? setNewAgencyMember((p) => ({
-                        ...p,
-                        name: e.target.value,
-                      }))
-                    : setNewFamilyMember((p) => ({
-                        ...p,
-                        name: e.target.value,
-                      }))
-                }
-                className="rounded-full"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-bold mb-1 block">Role</Label>
-              <select
-                data-ocid="agency.add_member.role_select"
-                value={isAgency ? newAgencyMember.role : newFamilyMember.role}
-                onChange={(e) =>
-                  isAgency
-                    ? setNewAgencyMember((p) => ({
-                        ...p,
-                        role: e.target.value as Role,
-                      }))
-                    : setNewFamilyMember((p) => ({
-                        ...p,
-                        role: e.target.value as Role,
-                      }))
-                }
-                className="w-full border border-border rounded-full px-4 py-2.5 text-sm focus:outline-none bg-background"
-              >
-                <option value="user">👤 User</option>
-                <option value="host">👑 Host</option>
-              </select>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                data-ocid="agency.add_member.cancel_button"
-                onClick={() =>
-                  isAgency ? setShowAddAgency(false) : setShowAddFamily(false)
-                }
-                className="flex-1 border border-border rounded-full py-2.5 font-bold text-sm"
-              >
-                Cancel
-              </button>
-              <GradientButton
-                data-ocid="agency.add_member.confirm_button"
-                onClick={addMember}
-                className="flex-1"
-              >
-                Add ✨
-              </GradientButton>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -3043,24 +2265,6 @@ function ProfileScreen() {
   });
   const [processingSubscription, setProcessingSubscription] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
-  const profilePicInputRef = useRef<HTMLInputElement>(null);
-  const coverPhotoInputRef = useRef<HTMLInputElement>(null);
-
-  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setUser({ ...user, profilePicture: url });
-    toast.success("Profile picture updated! ✨");
-  };
-
-  const handleCoverPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setUser({ ...user, coverPhoto: url });
-    toast.success("Cover photo updated! 🖼️");
-  };
 
   if (chatOpen) return <ChatScreen onBack={() => setChatOpen(false)} />;
   if (agencyOpen) return <AgencyScreen onBack={() => setAgencyOpen(false)} />;
@@ -3086,68 +2290,18 @@ function ProfileScreen() {
     <ScrollArea className="h-full" data-ocid="profile.page">
       <div className="pb-24">
         {/* Cover */}
-        <div
-          className="h-36 relative overflow-hidden"
-          style={
-            user.coverPhoto
-              ? {
-                  backgroundImage: `url(${user.coverPhoto})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }
-              : {}
-          }
-        >
-          {!user.coverPhoto && (
-            <div className="flare-gradient absolute inset-0" />
-          )}
-          {/* Cover photo edit button */}
-          <button
-            type="button"
-            data-ocid="profile.cover_photo_edit_button"
-            onClick={() => coverPhotoInputRef.current?.click()}
-            className="absolute bottom-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-colors z-10"
-          >
-            <Camera className="w-4 h-4 text-white" />
-          </button>
-          <input
-            ref={coverPhotoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleCoverPhotoChange}
-          />
-          <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 z-10">
-            <div className="relative">
-              <div className="w-24 h-24 rounded-full border-4 border-white overflow-hidden shadow-glow">
-                <img
-                  src={
-                    user.profilePicture ||
-                    "/assets/generated/profile-sofia.dim_400x500.jpg"
-                  }
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              {/* Profile pic edit button */}
-              <button
-                type="button"
-                data-ocid="profile.profile_pic_edit_button"
-                onClick={() => profilePicInputRef.current?.click()}
-                className="absolute bottom-0 right-0 w-7 h-7 flare-gradient rounded-full flex items-center justify-center border-2 border-white shadow"
-              >
-                <Camera className="w-3.5 h-3.5 text-white" />
-              </button>
-              <input
-                ref={profilePicInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleProfilePicChange}
+        <div className="flare-gradient h-36 relative">
+          <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
+            <div className="w-24 h-24 rounded-full border-4 border-white overflow-hidden shadow-glow">
+              <img
+                src="/assets/generated/profile-sofia.dim_400x500.jpg"
+                alt="Profile"
+                className="w-full h-full object-cover"
+                style={{ filter: "hue-rotate(180deg) saturate(1.2)" }}
               />
             </div>
           </div>
-          <div className="absolute top-4 right-4 flex gap-2 z-10">
+          <div className="absolute top-4 right-4 flex gap-2">
             <button
               type="button"
               data-ocid="profile.settings_button"
@@ -3579,7 +2733,7 @@ const systemMessages = [
   },
 ];
 
-const _mockConversations = [
+const mockConversations = [
   {
     id: 1,
     name: "Sofia",
@@ -3619,7 +2773,7 @@ const _mockConversations = [
 ];
 
 function MessagesScreen() {
-  const { setScreen, conversations, setSelectedConversationId } = useApp();
+  const { setScreen } = useApp();
   const [systemOpen, setSystemOpen] = useState(false);
 
   return (
@@ -3696,15 +2850,12 @@ function MessagesScreen() {
               Conversations
             </p>
             <div className="space-y-1">
-              {conversations.map((conv, i) => (
+              {mockConversations.map((conv, i) => (
                 <button
                   type="button"
                   key={conv.id}
                   data-ocid={`messages.conversation.item.${i + 1}`}
-                  onClick={() => {
-                    setSelectedConversationId(conv.id);
-                    setScreen("chat");
-                  }}
+                  onClick={() => setScreen("chat")}
                   className="w-full flex items-center gap-3 rounded-2xl p-3 hover:bg-secondary transition-colors"
                 >
                   <div className="relative flex-shrink-0">
@@ -3720,11 +2871,11 @@ function MessagesScreen() {
                     <div className="flex items-center justify-between">
                       <p className="font-black text-sm">{conv.name}</p>
                       <span className="text-xs text-muted-foreground">
-                        {conv.lastTime}
+                        {conv.time}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
-                      {conv.lastMessage}
+                      {conv.lastMsg}
                     </p>
                   </div>
                   {conv.unread > 0 && (
@@ -3747,8 +2898,9 @@ function MessagesScreen() {
 // ── Bottom Navigation ─────────────────────────────────────────────────────────
 const navItems = [
   { id: "home" as Screen, icon: Flame, label: "Home" },
-  { id: "discover" as Screen, icon: Compass, label: "Discover" },
   { id: "wallet" as Screen, icon: Wallet, label: "Wallet" },
+  { id: "messages" as Screen, icon: MessageCircle, label: "Messages" },
+  { id: "live" as Screen, icon: Video, label: "Live" },
   { id: "games" as Screen, icon: Gamepad2, label: "Games" },
   { id: "profile" as Screen, icon: User, label: "Profile" },
 ];
@@ -3782,7 +2934,7 @@ function BottomNav() {
               }`}
             >
               <Icon className={`w-5 h-5 ${active ? "text-white" : ""}`} />
-              {item.id === "home" && (
+              {item.id === "live" && (
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full pulse-live" />
               )}
             </div>
@@ -3815,182 +2967,7 @@ export default function App() {
     role: "user",
     isPremium: false,
     bio: "Ready to find love 🔥",
-    profilePicture: "/assets/generated/profile-sofia.dim_400x500.jpg",
-    coverPhoto: "",
   });
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: 1,
-      name: "Sofia",
-      avatar: "/assets/generated/profile-sofia.dim_400x500.jpg",
-      lastMessage: "Can't wait! 💕",
-      lastTime: "5m",
-      online: true,
-      unread: 2,
-      messages: [
-        {
-          id: 1,
-          from: "Sofia",
-          text: "Hey! Loved your profile 😍",
-          time: "2:30 PM",
-          mine: false,
-        },
-        {
-          id: 2,
-          from: "You",
-          text: "Thank you! You're amazing 🔥",
-          time: "2:31 PM",
-          mine: true,
-        },
-        {
-          id: 3,
-          from: "Sofia",
-          text: "When are we meeting? 😊",
-          time: "2:32 PM",
-          mine: false,
-        },
-        {
-          id: 4,
-          from: "You",
-          text: "This weekend? I know a great spot!",
-          time: "2:33 PM",
-          mine: true,
-        },
-        {
-          id: 5,
-          from: "Sofia",
-          text: "Can't wait! 💕",
-          time: "2:34 PM",
-          mine: false,
-        },
-      ],
-    },
-    {
-      id: 2,
-      name: "Amara",
-      avatar: "/assets/generated/profile-amara.dim_400x500.jpg",
-      lastMessage: "That sounds great! 😊",
-      lastTime: "1h",
-      online: true,
-      unread: 0,
-      messages: [
-        {
-          id: 1,
-          from: "Amara",
-          text: "Your energy is infectious! 🌟",
-          time: "1:00 PM",
-          mine: false,
-        },
-        {
-          id: 2,
-          from: "You",
-          text: "Thank you Amara 😊",
-          time: "1:01 PM",
-          mine: true,
-        },
-        {
-          id: 3,
-          from: "Amara",
-          text: "That sounds great! 😊",
-          time: "1:02 PM",
-          mine: false,
-        },
-      ],
-    },
-    {
-      id: 3,
-      name: "Zara",
-      avatar: "/assets/generated/profile-zara.dim_400x500.jpg",
-      lastMessage: "Let's chat soon 🌸",
-      lastTime: "3h",
-      online: false,
-      unread: 1,
-      messages: [
-        {
-          id: 1,
-          from: "Zara",
-          text: "Hi there! 🌸",
-          time: "10:00 AM",
-          mine: false,
-        },
-        {
-          id: 2,
-          from: "You",
-          text: "Hello Zara! You look beautiful 😍",
-          time: "10:01 AM",
-          mine: true,
-        },
-        {
-          id: 3,
-          from: "Zara",
-          text: "Let's chat soon 🌸",
-          time: "10:02 AM",
-          mine: false,
-        },
-      ],
-    },
-    {
-      id: 4,
-      name: "Chioma",
-      avatar: "/assets/generated/profile-sofia.dim_400x500.jpg",
-      lastMessage: "You're so sweet 🥰",
-      lastTime: "Yesterday",
-      online: false,
-      unread: 0,
-      messages: [
-        {
-          id: 1,
-          from: "You",
-          text: "Hey Chioma, nice to meet you!",
-          time: "Yesterday",
-          mine: true,
-        },
-        {
-          id: 2,
-          from: "Chioma",
-          text: "You're so sweet 🥰",
-          time: "Yesterday",
-          mine: false,
-        },
-      ],
-    },
-    {
-      id: 5,
-      name: "Nadia",
-      avatar: "/assets/generated/profile-zara.dim_400x500.jpg",
-      lastMessage: "We should meet! ✨",
-      lastTime: "2 days",
-      online: true,
-      unread: 3,
-      messages: [
-        {
-          id: 1,
-          from: "Nadia",
-          text: "I saw you in the live stream 😍",
-          time: "Monday",
-          mine: false,
-        },
-        {
-          id: 2,
-          from: "You",
-          text: "Really? That's so cool!",
-          time: "Monday",
-          mine: true,
-        },
-        {
-          id: 3,
-          from: "Nadia",
-          text: "We should meet! ✨",
-          time: "Monday",
-          mine: false,
-        },
-      ],
-    },
-  ]);
-  const [openRechargeOnLoad, setOpenRechargeOnLoad] = useState(false);
-  const [selectedConversationId, setSelectedConversationId] = useState<
-    number | null
-  >(null);
   const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
   const addGameHistory = useCallback(
     (g: GameHistory) => setGameHistory((h) => [g, ...h]),
@@ -4001,10 +2978,10 @@ export default function App() {
     switch (screen) {
       case "home":
         return <HomeScreen />;
-      case "discover":
-        return <DiscoverScreen />;
       case "wallet":
         return <WalletScreen />;
+      case "live":
+        return <LiveScreen />;
       case "games":
         return <GamesScreen />;
       case "messages":
@@ -4029,12 +3006,6 @@ export default function App() {
         addGameHistory,
         activeLiveStream,
         setActiveLiveStream,
-        conversations,
-        setConversations,
-        selectedConversationId,
-        setSelectedConversationId,
-        openRechargeOnLoad,
-        setOpenRechargeOnLoad,
       }}
     >
       <Toaster position="top-center" richColors />
