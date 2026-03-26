@@ -17,6 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -73,7 +79,8 @@ type Screen =
   | "profile"
   | "chat"
   | "agency"
-  | "liveview";
+  | "liveview"
+  | "messages";
 type Gender = "male" | "female";
 type Role = "user" | "host" | "agency";
 
@@ -247,7 +254,7 @@ const gamesList = [
     cost: 50,
     currency: "coins" as const,
     color: "from-purple-500 to-indigo-600",
-    reward: [100, 150, 200, 300],
+    reward: [0, 100, 200, 300],
   },
   {
     id: 2,
@@ -256,7 +263,7 @@ const gamesList = [
     cost: 100,
     currency: "diamonds" as const,
     color: "from-cyan-400 to-blue-600",
-    reward: [50, 100, 200, 500],
+    reward: [0, 100, 200, 500],
   },
   {
     id: 3,
@@ -427,6 +434,23 @@ function AuthScreen() {
       toast.error("Please enter your name");
       return;
     }
+    if (form.password.length < 4) {
+      toast.error("Password is too short — must be exactly 6 characters");
+      return;
+    }
+    if (form.password.length !== 6) {
+      toast.error("Password must be exactly 6 characters (letters + numbers)");
+      return;
+    }
+    if (mode === "signup") {
+      const pw = form.password;
+      const hasLetter = /[a-zA-Z]/.test(pw);
+      const hasDigit = /[0-9]/.test(pw);
+      if (!hasLetter || !hasDigit) {
+        toast.error("Password must contain both letters and numbers");
+        return;
+      }
+    }
     setLoading(true);
     await new Promise((r) => setTimeout(r, 900));
     setUser({
@@ -435,14 +459,12 @@ function AuthScreen() {
       email: form.email,
       gender: form.gender,
       country: form.country,
-      coins: 5000,
+      coins: 0,
       diamonds: 200,
     });
     setIsLoggedIn(true);
     setScreen("home");
-    toast.success(
-      `Welcome${form.name ? ` ${form.name}` : ""} 🔥 5000 starter coins added!`,
-    );
+    toast.success(`Welcome${form.name ? ` ${form.name}` : ""} 🔥`);
     setLoading(false);
   };
 
@@ -552,7 +574,7 @@ function AuthScreen() {
           <Input
             data-ocid="auth.password_input"
             type="password"
-            placeholder="Password"
+            placeholder="Password (6 chars, A-Z + 0-9)"
             value={form.password}
             onChange={(e) =>
               setForm((p) => ({ ...p, password: e.target.value }))
@@ -700,7 +722,7 @@ function GiftModal({
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
 function HomeScreen() {
-  const { user } = useApp();
+  const { user, setScreen } = useApp();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
   const [direction, setDirection] = useState(0);
@@ -742,6 +764,7 @@ function HomeScreen() {
           <button
             type="button"
             data-ocid="home.notification_button"
+            onClick={() => setScreen("messages")}
             className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-xs border border-border relative"
           >
             <Bell className="w-4 h-4 text-muted-foreground" />
@@ -850,6 +873,18 @@ function HomeScreen() {
                   </div>
                 </div>
               </div>
+              {/* Message button */}
+              <button
+                type="button"
+                data-ocid="home.card.message_button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setScreen("chat");
+                }}
+                className="absolute bottom-16 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full flex items-center justify-center"
+              >
+                <MessageCircle className="w-5 h-5 text-white" />
+              </button>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -885,7 +920,14 @@ function HomeScreen() {
         <div className="w-full mt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-bold text-foreground">Nearby 📍</span>
-            <span className="text-xs text-primary font-semibold">See all</span>
+            <button
+              type="button"
+              data-ocid="home.nearby.see_all_button"
+              onClick={() => toast.success("Showing all nearby users 📍")}
+              className="text-xs text-primary font-semibold hover:underline"
+            >
+              See all
+            </button>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
             {mockProfiles.map((p, i) => (
@@ -894,15 +936,24 @@ function HomeScreen() {
                 data-ocid={`home.nearby.item.${i + 1}`}
                 className="flex-shrink-0 flex flex-col items-center gap-1"
               >
-                <div
-                  className={`relative w-12 h-12 rounded-full overflow-hidden border-2 ${i % 2 === 0 ? "border-flare-pink" : "border-flare-orange"}`}
-                >
-                  <img
-                    src={p.image}
-                    alt={p.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
+                <div className="relative">
+                  <div
+                    className={`relative w-12 h-12 rounded-full overflow-hidden border-2 ${i % 2 === 0 ? "border-flare-pink" : "border-flare-orange"}`}
+                  >
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScreen("chat")}
+                    className="absolute -bottom-0.5 -right-0.5 w-4 h-4 flare-gradient rounded-full flex items-center justify-center border border-white"
+                  >
+                    <MessageCircle className="w-2 h-2 text-white" />
+                  </button>
                 </div>
                 <span className="text-xs font-medium text-foreground/80 w-12 text-center truncate">
                   {p.name}
@@ -1259,7 +1310,7 @@ function LiveStreamView({
   streamId,
   onBack,
 }: { streamId: number; onBack: () => void }) {
-  const { user, setUser } = useApp();
+  const { user, setUser, setScreen } = useApp();
   const [giftOpen, setGiftOpen] = useState(false);
   const [floatingGift, setFloatingGift] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -1368,7 +1419,13 @@ function LiveStreamView({
               <AvatarImage src={stream.image} />
               <AvatarFallback>{stream.name[0]}</AvatarFallback>
             </Avatar>
-            <span className="text-white font-bold text-sm">{stream.name}</span>
+            <button
+              type="button"
+              onClick={() => setScreen("profile")}
+              className="text-white font-bold text-sm hover:underline"
+            >
+              {stream.name}
+            </button>
           </div>
           <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-1.5">
             <Eye className="w-3 h-3 text-white" />
@@ -1410,9 +1467,13 @@ function LiveStreamView({
                 </span>
               </div>
               <div className="bg-black/50 rounded-full px-3 py-1 max-w-[80%]">
-                <span className="text-white/60 text-xs font-bold">
-                  {c.user}:{" "}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setScreen("profile")}
+                  className="text-white/60 text-xs font-bold hover:text-white inline"
+                >
+                  {c.user}:
+                </button>{" "}
                 <span className="text-white text-xs">{c.text}</span>
               </div>
             </div>
@@ -1485,7 +1546,7 @@ function LiveStreamView({
 
 // ── Live Screen ───────────────────────────────────────────────────────────────
 function LiveScreen() {
-  const { activeLiveStream, setActiveLiveStream } = useApp();
+  const { activeLiveStream, setActiveLiveStream, setScreen, user } = useApp();
 
   if (activeLiveStream !== null) {
     return (
@@ -1504,6 +1565,15 @@ function LiveScreen() {
           <button
             type="button"
             data-ocid="live.go_live_button"
+            onClick={() => {
+              if (user.role === "host") {
+                toast.success("🔴 Starting your live stream...");
+              } else {
+                toast.error(
+                  "You need Host status to go live! Recharge ₦30,000+ to become a host.",
+                );
+              }
+            }}
             className="flare-gradient text-white text-xs font-bold rounded-full px-3 py-1.5 flex items-center gap-1"
           >
             <Video className="w-3 h-3" /> Go Live
@@ -1548,9 +1618,17 @@ function LiveScreen() {
               </div>
               {/* Info */}
               <div className="absolute bottom-2 left-2 right-2">
-                <p className="text-white font-black text-sm leading-tight">
+                <button
+                  type="button"
+                  data-ocid={`live.stream.name.${i + 1}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setScreen("profile");
+                  }}
+                  className="text-white font-black text-sm leading-tight hover:underline"
+                >
                   {stream.name}
-                </p>
+                </button>
                 <p className="text-white/70 text-xs">{stream.topic}</p>
                 <p className="text-yellow-400 text-xs">
                   🎁 {stream.gifts} gifts
@@ -1575,26 +1653,40 @@ function GamesScreen() {
     null,
   );
   const [tab, setTab] = useState<"games" | "history">("games");
+  const [betAmounts, setBetAmounts] = useState<Record<string, number>>({});
+
+  const getBet = (game: (typeof gamesList)[0]) =>
+    betAmounts[game.id] ?? game.cost;
+
+  const adjustBet = (game: (typeof gamesList)[0], delta: number) => {
+    const current = getBet(game);
+    const balance = game.currency === "coins" ? user.coins : user.diamonds;
+    const next = Math.max(10, Math.min(balance, current + delta));
+    setBetAmounts((prev) => ({ ...prev, [game.id]: next }));
+  };
 
   const playGame = async (game: (typeof gamesList)[0]) => {
+    const bet = getBet(game);
     const balance = game.currency === "coins" ? user.coins : user.diamonds;
-    if (balance < game.cost) {
+    if (balance < bet) {
       toast.error(`Not enough ${game.currency}!`);
       return;
     }
     setPlaying(true);
     setResult(null);
-    // Deduct cost
+    // Deduct bet
     const userAfterDeduct =
       game.currency === "coins"
-        ? { ...user, coins: user.coins - game.cost }
-        : { ...user, diamonds: user.diamonds - game.cost };
+        ? { ...user, coins: user.coins - bet }
+        : { ...user, diamonds: user.diamonds - bet };
     setUser(userAfterDeduct);
 
     await new Promise((r) => setTimeout(r, 1200));
 
-    const reward = game.reward[Math.floor(Math.random() * game.reward.length)];
-    const won = reward > 0;
+    const rewardBase =
+      game.reward[Math.floor(Math.random() * game.reward.length)];
+    const won = rewardBase > 0;
+    const reward = won ? Math.round(bet * (rewardBase / game.cost)) : 0;
 
     if (won) {
       if (game.currency === "coins")
@@ -1610,7 +1702,7 @@ function GamesScreen() {
       id: Date.now(),
       game: game.name,
       result: won ? `Won ${reward} ${game.currency}` : "Lost",
-      amount: won ? reward : game.cost,
+      amount: won ? reward : bet,
       currency: game.currency,
       timestamp: new Date().toLocaleTimeString(),
       won,
@@ -1680,11 +1772,35 @@ function GamesScreen() {
                   <p className="font-black text-sm leading-tight">
                     {game.name}
                   </p>
-                  <p className="text-white/70 text-xs mt-0.5">
-                    {game.currency === "coins"
-                      ? `🪙${game.cost}`
-                      : `💎${game.cost}`}
-                  </p>
+                  {/* Bet stepper */}
+                  <div className="flex items-center gap-1 mt-2">
+                    <button
+                      type="button"
+                      data-ocid={`games.bet_minus.${i + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        adjustBet(game, -50);
+                      }}
+                      className="w-6 h-6 bg-white/30 hover:bg-white/50 rounded-full flex items-center justify-center text-white text-sm font-black transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="text-white text-xs font-bold min-w-[36px] text-center">
+                      {game.currency === "coins" ? "🪙" : "💎"}
+                      {getBet(game)}
+                    </span>
+                    <button
+                      type="button"
+                      data-ocid={`games.bet_plus.${i + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        adjustBet(game, 50);
+                      }}
+                      className="w-6 h-6 bg-white/30 hover:bg-white/50 rounded-full flex items-center justify-center text-white text-sm font-black transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                   <button
                     type="button"
                     data-ocid={`games.play.${i + 1}`}
@@ -1692,7 +1808,7 @@ function GamesScreen() {
                       setActiveGame(game);
                       playGame(game);
                     }}
-                    className="mt-3 bg-white/20 hover:bg-white/30 border border-white/30 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1 transition-colors"
+                    className="mt-2 bg-white/20 hover:bg-white/30 border border-white/30 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-1 transition-colors"
                   >
                     <Play className="w-3 h-3" /> Play
                   </button>
@@ -1784,7 +1900,7 @@ function GamesScreen() {
                     {result.won ? "🎉" : "😢"}
                   </motion.div>
                   <p className="font-black text-2xl">
-                    {result.won ? "You Won!" : "Better Luck Next Time"}
+                    {result.won ? "You Won!" : "You Lost! 😢"}
                   </p>
                   {result.won && (
                     <p className="text-emerald-600 font-black text-xl mt-1">
@@ -2060,21 +2176,100 @@ function AgencyScreen({ onBack }: { onBack: () => void }) {
 }
 
 // ── Profile Screen ────────────────────────────────────────────────────────────
+function ContactUsScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="flex flex-col h-full" data-ocid="contact.page">
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-border">
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-black">Contact Us</h1>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4 pb-24">
+          <div className="flare-gradient rounded-3xl p-5 text-center text-white">
+            <div className="text-4xl mb-2">💬</div>
+            <h2 className="font-black text-xl">We're here to help!</h2>
+            <p className="text-white/80 text-sm mt-1">
+              Our team responds within 24 hours
+            </p>
+          </div>
+          {[
+            {
+              icon: "📧",
+              title: "Email Support",
+              desc: "support@flareup.app",
+              sub: "Response within 24 hours",
+            },
+            {
+              icon: "💬",
+              title: "Live Chat",
+              desc: "Chat with an agent now",
+              sub: "Available 9AM - 9PM WAT",
+            },
+            {
+              icon: "📱",
+              title: "WhatsApp",
+              desc: "+234 800 FLAREUP",
+              sub: "Quick replies on WhatsApp",
+            },
+            {
+              icon: "❓",
+              title: "FAQ & Help Center",
+              desc: "Browse common questions",
+              sub: "Instant answers",
+            },
+            {
+              icon: "🐦",
+              title: "Twitter / X",
+              desc: "@FlareUpApp",
+              sub: "DM us for fast support",
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3 shadow-xs"
+            >
+              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
+                {item.icon}
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-sm">{item.title}</p>
+                <p className="text-primary text-sm font-medium">{item.desc}</p>
+                <p className="text-xs text-muted-foreground">{item.sub}</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
 function ProfileScreen() {
   const { user, setUser, setScreen, setIsLoggedIn } = useApp();
   const [chatOpen, setChatOpen] = useState(false);
   const [agencyOpen, setAgencyOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     name: user.name,
     bio: user.bio,
     country: user.country,
   });
   const [processingSubscription, setProcessingSubscription] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
 
   if (chatOpen) return <ChatScreen onBack={() => setChatOpen(false)} />;
   if (agencyOpen) return <AgencyScreen onBack={() => setAgencyOpen(false)} />;
+  if (contactOpen)
+    return <ContactUsScreen onBack={() => setContactOpen(false)} />;
 
   const handleSaveProfile = () => {
     setUser({ ...user, ...editForm });
@@ -2110,6 +2305,7 @@ function ProfileScreen() {
             <button
               type="button"
               data-ocid="profile.settings_button"
+              onClick={() => setSettingsOpen(true)}
               className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center"
             >
               <Settings className="w-4 h-4 text-white" />
@@ -2258,6 +2454,27 @@ function ProfileScreen() {
             <ArrowRight className="w-4 h-4 text-muted-foreground" />
           </button>
 
+          {/* Contact Us */}
+          <button
+            type="button"
+            data-ocid="profile.contact_button"
+            onClick={() => setContactOpen(true)}
+            className="w-full mt-3 flex items-center justify-between bg-card border border-border rounded-2xl p-4 hover:bg-secondary transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center text-xl">
+                💬
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">Contact Us</p>
+                <p className="text-xs text-muted-foreground">
+                  Customer support & help
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+          </button>
+
           {/* Logout */}
           <button
             type="button"
@@ -2391,7 +2608,290 @@ function ProfileScreen() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Settings Sheet */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-3xl max-h-[85vh] overflow-y-auto"
+          data-ocid="profile.settings.sheet"
+        >
+          <SheetHeader className="mb-4">
+            <SheetTitle className="font-black text-lg">⚙️ Settings</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-2 pb-8">
+            {[
+              {
+                icon: "✏️",
+                label: "Edit Profile",
+                action: () => {
+                  setSettingsOpen(false);
+                  setTimeout(() => setEditOpen(true), 200);
+                },
+              },
+              {
+                icon: "🔒",
+                label: "Privacy Settings",
+                action: () => toast.success("Privacy settings saved ✅"),
+              },
+              {
+                icon: "🔔",
+                label: "Notification Preferences",
+                action: () =>
+                  toast.success("Notification preferences updated 🔔"),
+              },
+              {
+                icon: "🔑",
+                label: "Change Password",
+                action: () =>
+                  toast.info("A password reset link has been sent 📧"),
+              },
+              {
+                icon: "🌍",
+                label: "Language & Region",
+                action: () => toast.success("Language set to English 🌍"),
+              },
+              {
+                icon: "👁️",
+                label: "Visibility",
+                action: () => toast.success("Profile visibility updated 👁️"),
+              },
+              {
+                icon: "💬",
+                label: "Help & Support",
+                action: () => {
+                  setSettingsOpen(false);
+                  setTimeout(() => setContactOpen(true), 200);
+                },
+              },
+              {
+                icon: "⭐",
+                label: "Rate FlareUp",
+                action: () => toast.success("Thanks for the love! ⭐⭐⭐⭐⭐"),
+              },
+              {
+                icon: "🚪",
+                label: "Log Out",
+                action: () => {
+                  setSettingsOpen(false);
+                  setTimeout(() => {
+                    setIsLoggedIn(false);
+                    setScreen("auth");
+                    toast.success("Logged out. See you soon! 👋");
+                  }, 200);
+                },
+                danger: true,
+              },
+            ].map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={item.action}
+                className={`w-full flex items-center gap-3 p-4 rounded-2xl hover:bg-secondary transition-colors text-left ${(item as { danger?: boolean }).danger ? "hover:bg-red-50" : ""}`}
+              >
+                <span className="text-xl w-8 text-center">{item.icon}</span>
+                <span
+                  className={`font-semibold text-sm flex-1 ${(item as { danger?: boolean }).danger ? "text-red-500" : ""}`}
+                >
+                  {item.label}
+                </span>
+                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </ScrollArea>
+  );
+}
+
+// ── Messages Screen ───────────────────────────────────────────────────────────
+const systemMessages = [
+  {
+    id: 1,
+    text: "Welcome to FlareUp! 🔥 Start exploring matches.",
+    time: "Just now",
+    unread: true,
+  },
+  {
+    id: 2,
+    text: "Your profile was liked 5 times today! 💕",
+    time: "2h ago",
+    unread: true,
+  },
+  {
+    id: 3,
+    text: "New match available nearby. Check it out!",
+    time: "Yesterday",
+    unread: false,
+  },
+  {
+    id: 4,
+    text: "Reminder: Top up coins to unlock premium features.",
+    time: "2d ago",
+    unread: false,
+  },
+];
+
+const mockConversations = [
+  {
+    id: 1,
+    name: "Sofia",
+    avatar: "/assets/generated/profile-sofia.dim_400x500.jpg",
+    lastMsg: "Can't wait! 💕",
+    time: "5m",
+    online: true,
+    unread: 2,
+  },
+  {
+    id: 2,
+    name: "Mei Lin",
+    avatar: "/assets/generated/home-match2.dim_400x500.jpg",
+    lastMsg: "That sounds great! 😊",
+    time: "1h",
+    online: true,
+    unread: 0,
+  },
+  {
+    id: 3,
+    name: "Aisha",
+    avatar: "/assets/generated/home-match3.dim_400x500.jpg",
+    lastMsg: "Let's chat soon 🌸",
+    time: "3h",
+    online: false,
+    unread: 1,
+  },
+  {
+    id: 4,
+    name: "Priya",
+    avatar: "/assets/generated/home-match4.dim_400x500.jpg",
+    lastMsg: "You're so sweet 🥰",
+    time: "Yesterday",
+    online: false,
+    unread: 0,
+  },
+];
+
+function MessagesScreen() {
+  const { setScreen } = useApp();
+  const [systemOpen, setSystemOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col h-full" data-ocid="messages.page">
+      {/* Header */}
+      <div className="px-4 pt-5 pb-3 bg-background border-b border-border">
+        <h1 className="text-2xl font-black">💬 Messages</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Your conversations & notifications
+        </p>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="pb-24">
+          {/* System Messages pinned thread */}
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              System
+            </p>
+            <button
+              type="button"
+              data-ocid="messages.system.button"
+              onClick={() => setSystemOpen(!systemOpen)}
+              className="w-full flex items-center gap-3 bg-card border border-border rounded-2xl p-3 hover:bg-secondary transition-colors"
+            >
+              <div className="w-12 h-12 flare-gradient rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-2xl">🔔</span>
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center justify-between">
+                  <p className="font-black text-sm">FlareUp Notifications</p>
+                  <span className="text-xs text-muted-foreground">Now</span>
+                </div>
+                <p className="text-xs text-muted-foreground truncate">
+                  Welcome to FlareUp! 🔥 Start exploring...
+                </p>
+              </div>
+              <div className="w-5 h-5 flare-gradient rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-[10px] font-bold">2</span>
+              </div>
+            </button>
+
+            {/* Expanded system messages */}
+            {systemOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="mt-2 space-y-2 pl-2"
+              >
+                {systemMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    data-ocid={`messages.system.item.${msg.id}`}
+                    className={`flex items-start gap-3 rounded-xl p-2.5 ${msg.unread ? "bg-pink-50 border border-pink-100" : "bg-secondary/40"}`}
+                  >
+                    <span className="text-lg mt-0.5">
+                      {msg.unread ? "🔴" : "⚪"}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm text-foreground">{msg.text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {msg.time}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </div>
+
+          {/* User conversations */}
+          <div className="px-4 pt-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+              Conversations
+            </p>
+            <div className="space-y-1">
+              {mockConversations.map((conv, i) => (
+                <button
+                  type="button"
+                  key={conv.id}
+                  data-ocid={`messages.conversation.item.${i + 1}`}
+                  onClick={() => setScreen("chat")}
+                  className="w-full flex items-center gap-3 rounded-2xl p-3 hover:bg-secondary transition-colors"
+                >
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="w-12 h-12">
+                      <AvatarImage src={conv.avatar} />
+                      <AvatarFallback>{conv.name[0]}</AvatarFallback>
+                    </Avatar>
+                    {conv.online && (
+                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
+                    )}
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-black text-sm">{conv.name}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {conv.time}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {conv.lastMsg}
+                    </p>
+                  </div>
+                  {conv.unread > 0 && (
+                    <div className="w-5 h-5 flare-gradient rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-[10px] font-bold">
+                        {conv.unread}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
 
@@ -2399,6 +2899,7 @@ function ProfileScreen() {
 const navItems = [
   { id: "home" as Screen, icon: Flame, label: "Home" },
   { id: "wallet" as Screen, icon: Wallet, label: "Wallet" },
+  { id: "messages" as Screen, icon: MessageCircle, label: "Messages" },
   { id: "live" as Screen, icon: Video, label: "Live" },
   { id: "games" as Screen, icon: Gamepad2, label: "Games" },
   { id: "profile" as Screen, icon: User, label: "Profile" },
@@ -2459,7 +2960,7 @@ export default function App() {
     email: "",
     gender: "male",
     country: "Nigeria",
-    coins: 5000,
+    coins: 0,
     diamonds: 200,
     level: 3,
     totalRecharge: 15000,
@@ -2483,6 +2984,8 @@ export default function App() {
         return <LiveScreen />;
       case "games":
         return <GamesScreen />;
+      case "messages":
+        return <MessagesScreen />;
       case "profile":
         return <ProfileScreen />;
       default:

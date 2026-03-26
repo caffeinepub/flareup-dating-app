@@ -1,41 +1,31 @@
-# FlareUp – Light Up Your Love
+# FlareUp Dating App
 
 ## Current State
-New project, no existing application files.
+- App has 8 interactive screens: Home, Wallet, Live, Games, Profile, Chat, etc.
+- Bottom nav has 5 tabs: Home, Wallet, Live, Games, Profile
+- Login validates only that fields are non-empty; signup enforces 6-char alphanumeric password
+- Live streaming shows streamer name and commenter names as plain non-clickable text
+- No dedicated Messages tab in the bottom nav
+- Mini-games have fixed bet amounts that users cannot change
 
 ## Requested Changes (Diff)
 
 ### Add
-- Full mobile dating app prototype with 5 main screens via bottom navigation
-- Authentication screens: Login, Signup with email/phone
-- Home screen: Swipe card match feed, profile previews, gift button
-- Wallet screen: Coin/diamond balances, recharge via OPay/PayPal, conversion, level display, game history
-- Live streaming screen: Stream view, real-time gift overlay, duration timer, floating gift button, doubling rules display
-- Mini-games screen: Game cards with coin/diamond cost, reward display, game history
-- Profile & Chat screen: View/edit profile, messaging UI, diamond gifts received
-- Gifting system: Gift modal with animated notifications, send coins as gifts
-- Subscription modal: $6/month premium prompt for male users
-- Agencies & Families UI: Group management screens, member lists, add/remove
-- Role system: user, host, agency roles displayed on profiles
-- Level system: displayed on profiles and wallet
+- New Messages tab in bottom nav with MessageCircle icon, navigating to a messages screen showing user conversations AND system messages (e.g. FlareUp system notifications)
+- Messages screen should list conversations + a pinned system messages thread at the top
 
 ### Modify
-- N/A (new project)
+- Login password validation: block login if password length < 4; require exactly 6 characters for login to succeed. Show clear error if < 4 chars entered.
+- Live screen: make streamer name (in active stream top bar) and commenter names (in comment feed) clickable — tapping navigates to that user's profile screen
+- Mini-games: replace fixed bet amounts with user-adjustable input (number input or +/- stepper) so players can set how many coins/diamonds to wager per play
 
 ### Remove
-- N/A (new project)
+- Nothing removed
 
 ## Implementation Plan
-1. Set up backend with authorization for user roles (user, host, agency)
-2. Create Motoko backend with user profiles, wallet, gifts, subscriptions
-3. Build frontend with React + Tailwind using red/hot-pink/orange/black/white palette
-4. Implement bottom navigation with 5 tabs: Home, Wallet, Live, Mini-Games, Profile
-5. Build Auth screens (login/signup)
-6. Build Home swipe card feed
-7. Build Wallet with coin/diamond balances and recharge modals
-8. Build Live streaming UI with gift overlay
-9. Build Mini-games grid
-10. Build Profile/Chat screens
-11. Add gift animation modals
-12. Add subscription prompt modals
-13. Add Agencies & Families management UI
+1. Add `messages` to the Screen type and add a MessagesScreen component showing system messages thread + user conversations list
+2. Add Messages tab (MessageCircle icon) to navItems in BottomNav
+3. In handleSubmit login branch: add password length check — if < 4 show error "Password too short", if not exactly 6 show error "Password must be exactly 6 characters"
+4. In LiveScreen active stream view: wrap streamer name span in a button that calls setScreen("profile")
+5. In comment feed: wrap commenter name span in a button that calls setScreen("profile")
+6. In GamesScreen: replace fixed coin/diamond bet display with a stepper (+/- buttons and value) allowing users to set their wager amount before playing
